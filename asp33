@@ -1,0 +1,1806 @@
+
+
+using BTRS.Data;
+using BTRS.Models;
+using Microsoft.AspNetCore.Mvc;
+
+namespace BTRS.Controllers
+{
+    public class UserController : Controller
+    {
+        private SystemDbContext _context;
+
+        public UserController(SystemDbContext context)
+        {
+            _context = context;
+        }
+        [HttpGet]
+        public IActionResult SignUp()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        public IActionResult SignUp(Passenger passenger)
+        {
+            bool empty = checkEmpty(passenger);
+            bool duplicat = checkUsername(passenger.username,passenger.phone_n,passenger.email);
+
+            if (empty)
+            {
+                if (duplicat)
+                {
+                    _context.passenger.Add(passenger);
+                    _context.SaveChanges();
+
+                    TempData["Msg"] = "the data was saved";
+                    return View();
+                }
+                else
+                {
+                    TempData["Msg"] = "Please Change the username or email or phone number";
+                    return View();
+                }
+            }
+            else
+            {
+                TempData["Msg"] = "Please fill all input ";
+                return View();
+            }
+
+
+
+        }
+
+
+        public bool checkUsername(string username,string phone_n,string email)
+        {
+           
+
+            Passenger user = _context.passenger.Where(u => u.username.Equals(username)||u.email.Equals(email)||u.phone_n.Equals(phone_n)).FirstOrDefault();
+            if (user != null)
+            {
+                return false;
+            }
+            else
+            {
+                return true;
+            }
+        }
+
+        public bool checkEmpty(Passenger user)
+        {
+            if (String.IsNullOrEmpty(user.username)) return false;
+            else if (String.IsNullOrEmpty(user.password)) return false;
+            else if (String.IsNullOrEmpty(user.name)) return false;
+            else if (String.IsNullOrEmpty(user.Gender)) return false;
+            else if (String.IsNullOrEmpty(user.phone_n)) return false;
+            else if (String.IsNullOrEmpty(user.email)) return false;
+            else return true;
+        }
+
+
+        [HttpGet]
+        public IActionResult Login()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        public IActionResult Login(Login userlogin)
+        {
+            if (ModelState.IsValid)
+            {
+                string username = userlogin.username;
+                string password = userlogin.password;
+
+                Passenger user = _context.passenger.Where(
+                     u => u.username.Equals(username) &&
+                     u.password.Equals(password)
+                     ).FirstOrDefault();
+
+                Admin admin = _context.admin.Where(
+                    a => a.username.Equals(username)
+                    &&
+                    a.password.Equals(password)
+                    ).FirstOrDefault();
+
+
+
+
+                if (user != null)
+                {
+                    HttpContext.Session.SetInt32("userID", user.ID);
+
+                    return RedirectToAction("Bus_Trip");
+                }
+                else if (admin != null)
+                {
+
+                    HttpContext.Session.SetInt32("adminid", admin.Id);
+
+                    return RedirectToAction("Create", "Trip");
+                }
+                else
+                {
+                    TempData["Msg"] = "The user Not Found";
+                }
+
+
+            }
+            else
+            {
+
+            }
+            return View();
+        }
+
+        public IActionResult Bus_Trip()
+        {
+            return View(_context.trip.ToList());
+        }
+        public IActionResult Book(int id)
+        {
+            int userID = (int)HttpContext.Session.GetInt32("userID");
+
+            Passenger_Trip passenger_Trip = new Passenger_Trip();
+            passenger_Trip.passenger = _context.passenger.Find(userID);
+            passenger_Trip.trip = _context.trip.Find(id);
+
+            _context.passenger_Trips.Add(passenger_Trip);
+            _context.SaveChanges();
+
+
+            return RedirectToAction("Book_List");
+        }
+        public IActionResult Book_List()
+        {
+            int userID = (int)HttpContext.Session.GetInt32("userID");
+
+            List<int> lst_passenger = _context.passenger_Trips.Where(
+                t => t.passenger.ID == userID).Select(s => s.trip.Id).ToList();
+
+            List<Trip> lst_trip = _context.trip.Where(
+                t => lst_passenger.Contains(t.Id)
+                ).ToList();
+
+            return View(lst_trip);
+        }
+        public IActionResult DeleteBook(int tripid)
+        {
+            int userID = (int)HttpContext.Session.GetInt32("userID");
+
+          Passenger_Trip passenger_Trip=  _context.passenger_Trips.Where(
+                t =>t.passenger.ID==userID&&t.trip.Id==tripid ).FirstOrDefault();
+                ;
+            _context.passenger_Trips.Remove(passenger_Trip);
+            _context.SaveChanges();
+            return RedirectToAction("Book_List");
+
+        }
+        
+    }
+}
+
+................................................
+..................................................
+using BTRS.Data;
+using BTRS.Models;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace BTRS.Controllers
+{
+    public class TripController : Controller
+    {
+        private SystemDbContext _context;
+
+        public TripController(SystemDbContext context)
+        {
+            _context = context;
+        }
+
+        public ActionResult Index()
+        {
+            return View(_context.trip.ToList());
+        }
+
+        // GET: TripController/Details/5
+        public ActionResult Details(int id)
+        {
+            Trip trip = _context.trip.Find(id);
+            return View(trip);
+        }
+
+        // GET: TripController/Create
+        public ActionResult Create()
+        {
+            return View();
+        }
+
+        // POST: TripController/Create
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult Create(Trip trip)
+        {
+            try
+            {
+                int adminid = (int)HttpContext.Session.GetInt32("adminid");
+                Admin ?admin = _context.admin.Where(a => a.Id == adminid).FirstOrDefault();
+                trip.Admin = admin;
+                _context.trip.Add(trip);
+                _context.SaveChanges();
+                return RedirectToAction();
+            }
+            catch
+            {
+                return View();
+            }
+        }
+
+        // GET: TripController/Edit/5
+        public ActionResult Edit(int id)
+        {
+            Trip trip = _context.trip.Find(id);
+            return View(trip);
+        }
+
+        // POST: TripController/Edit/5
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult Edit(int id, Trip trip)
+        {
+            try
+            {
+                _context.trip.Update(trip);
+                _context.SaveChanges();
+                return RedirectToAction(nameof(Index));
+            }
+            catch
+            {
+                return View();
+            }
+        }
+
+        // GET: TripController/Delete/5
+        public ActionResult Delete(int id)
+        {
+            Trip trip = _context.trip.Find(id);
+
+            return View();
+        }
+
+        // POST: TripController/Delete/5
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult Delete(int id, Trip trip)
+        {
+            try
+            {
+                _context.trip.Remove(trip);
+                _context.SaveChanges();
+                return RedirectToAction(nameof(Index));
+            }
+            catch
+            {
+                return View();
+            }
+        }
+    }
+}
+.................................................................
+..................................................................
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore;
+using BTRS.Data;
+using BTRS.Models;
+
+namespace BTRS.Controllers
+{
+    public class BusesController : Controller
+    {
+        private readonly SystemDbContext _context;
+
+        public BusesController(SystemDbContext context)
+        {
+            _context = context;
+        }
+
+        // GET: Buses
+        public async Task<IActionResult> Index()
+        {
+              return _context.bus != null ? 
+                          View(await _context.bus.ToListAsync()) :
+                          Problem("Entity set 'SystemDbContext.bus'  is null.");
+        }
+
+        // GET: Buses/Details/5
+        public async Task<IActionResult> Details(int? id)
+        {
+            if (id == null || _context.bus == null)
+            {
+                return NotFound();
+            }
+
+            var bus = await _context.bus
+                .FirstOrDefaultAsync(m => m.ID == id);
+            if (bus == null)
+            {
+                return NotFound();
+            }
+
+            return View(bus);
+        }
+
+        // GET: Buses/Create
+        public IActionResult Create()
+        {
+            return View();
+        }
+
+        // POST: Buses/Create
+        // To protect from overposting attacks, enable the specific properties you want to bind to.
+        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create(IFormCollection form)
+        {
+            int tripId = int.Parse(form["tripId"]);
+            string caption_name = form["caption_name"].ToString();
+            string n_ofSeat = form["n_ofSeat"].ToString();
+
+            Bus bus = new Bus();
+            bus.caption_name = caption_name;
+            bus.n_ofSeat = n_ofSeat;
+
+            bus.trip = _context.trip.Find(tripId);
+
+            _context.bus.Add(bus);
+            _context.SaveChanges();
+
+            return RedirectToAction("Index");
+        }
+
+        // GET: Buses/Edit/5
+        public async Task<IActionResult> Edit(int? id)
+        {
+            if (id == null || _context.bus == null)
+            {
+                return NotFound();
+            }
+
+            var bus = await _context.bus.FindAsync(id);
+            if (bus == null)
+            {
+                return NotFound();
+            }
+            return View(bus);
+        }
+
+        // POST: Buses/Edit/5
+        // To protect from overposting attacks, enable the specific properties you want to bind to.
+        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(int id, [Bind("ID,caption_name,n_ofSeat")] Bus bus)
+        {
+            if (id != bus.ID)
+            {
+                return NotFound();
+            }
+
+            if (ModelState.IsValid)
+            {
+                try
+                {
+                    _context.Update(bus);
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    if (!BusExists(bus.ID))
+                    {
+                        return NotFound();
+                    }
+                    else
+                    {
+                        throw;
+                    }
+                }
+                return RedirectToAction(nameof(Index));
+            }
+            return View(bus);
+        }
+
+        // GET: Buses/Delete/5
+        public async Task<IActionResult> Delete(int? id)
+        {
+            if (id == null || _context.bus == null)
+            {
+                return NotFound();
+            }
+
+            var bus = await _context.bus
+                .FirstOrDefaultAsync(m => m.ID == id);
+            if (bus == null)
+            {
+                return NotFound();
+            }
+
+            return View(bus);
+        }
+
+        // POST: Buses/Delete/5
+        [HttpPost, ActionName("Delete")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteConfirmed(int id)
+        {
+            if (_context.bus == null)
+            {
+                return Problem("Entity set 'SystemDbContext.bus'  is null.");
+            }
+            var bus = await _context.bus.FindAsync(id);
+            if (bus != null)
+            {
+                _context.bus.Remove(bus);
+            }
+            
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
+        }
+
+        private bool BusExists(int id)
+        {
+          return (_context.bus?.Any(e => e.ID == id)).GetValueOrDefault();
+        }
+    }
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+using BTRS.Models;
+using Microsoft.EntityFrameworkCore;
+
+namespace BTRS.Data
+{
+    public class SystemDbContext : DbContext
+    {
+        public SystemDbContext(DbContextOptions options) : base(options)
+        {
+        }
+        public DbSet<Passenger> passenger { set; get; }
+        public DbSet<Trip> trip { set; get; }
+        public DbSet<Bus> bus { set; get; }
+        public DbSet<Admin> admin { set; get; }
+        public DbSet<Passenger_Trip>passenger_Trips { set; get; }
+
+    }
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace BTRS.Migrations
+{
+    public partial class First : Migration
+    {
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.CreateTable(
+                name: "admin",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    username = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    password = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    fname = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_admin", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "passenger",
+                columns: table => new
+                {
+                    ID = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    name = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    password = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    Gender = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    username = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    email = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    phone_n = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_passenger", x => x.ID);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "trip",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    trip_dist = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    S_date = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    E_date = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    AdminId = table.Column<int>(type: "int", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_trip", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_trip_admin_AdminId",
+                        column: x => x.AdminId,
+                        principalTable: "admin",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "bus",
+                columns: table => new
+                {
+                    ID = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    caption_name = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    n_ofSeat = table.Column<int>(type: "int", maxLength: 50, nullable: false),
+                    FK_tripID = table.Column<int>(type: "int", nullable: false),
+                    FK_AdminID = table.Column<int>(type: "int", nullable: false),
+                    fk_ID_admin = table.Column<int>(type: "int", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_bus", x => x.ID);
+                    table.ForeignKey(
+                        name: "FK_bus_admin_FK_AdminID",
+                        column: x => x.FK_AdminID,
+                        principalTable: "admin",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_bus_trip_fk_ID_admin",
+                        column: x => x.fk_ID_admin,
+                        principalTable: "trip",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_bus_trip_FK_tripID",
+                        column: x => x.FK_tripID,
+                        principalTable: "trip",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "passenger_Trips",
+                columns: table => new
+                {
+                    ID = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    FK_PassengerID = table.Column<int>(type: "int", nullable: false),
+                    passesngerID = table.Column<int>(type: "int", nullable: false),
+                    FK_TripID = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_passenger_Trips", x => x.ID);
+                    table.ForeignKey(
+                        name: "FK_passenger_Trips_passenger_FK_PassengerID",
+                        column: x => x.FK_PassengerID,
+                        principalTable: "passenger",
+                        principalColumn: "ID",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_passenger_Trips_trip_FK_TripID",
+                        column: x => x.FK_TripID,
+                        principalTable: "trip",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_bus_FK_AdminID",
+                table: "bus",
+                column: "FK_AdminID");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_bus_fk_ID_admin",
+                table: "bus",
+                column: "fk_ID_admin");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_bus_FK_tripID",
+                table: "bus",
+                column: "FK_tripID");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_passenger_Trips_FK_PassengerID",
+                table: "passenger_Trips",
+                column: "FK_PassengerID");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_passenger_Trips_FK_TripID",
+                table: "passenger_Trips",
+                column: "FK_TripID");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_trip_AdminId",
+                table: "trip",
+                column: "AdminId");
+        }
+
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.DropTable(
+                name: "bus");
+
+            migrationBuilder.DropTable(
+                name: "passenger_Trips");
+
+            migrationBuilder.DropTable(
+                name: "passenger");
+
+            migrationBuilder.DropTable(
+                name: "trip");
+
+            migrationBuilder.DropTable(
+                name: "admin");
+        }
+    }
+}
+..............................................................................................
+................................................................................................
+// <auto-generated />
+using System;
+using BTRS.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+
+#nullable disable
+
+namespace BTRS.Migrations
+{
+    [DbContext(typeof(SystemDbContext))]
+    partial class SystemDbContextModelSnapshot : ModelSnapshot
+    {
+        protected override void BuildModel(ModelBuilder modelBuilder)
+        {
+#pragma warning disable 612, 618
+            modelBuilder
+                .HasAnnotation("ProductVersion", "6.0.24")
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+
+            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder, 1L, 1);
+
+            modelBuilder.Entity("BTRS.Models.Admin", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+
+                    b.Property<string>("fname")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("password")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("username")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("admin");
+                });
+
+            modelBuilder.Entity("BTRS.Models.Bus", b =>
+                {
+                    b.Property<int>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ID"), 1L, 1);
+
+                    b.Property<int>("FK_AdminID")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FK_tripID")
+                        .HasColumnType("int");
+
+                    b.Property<string>("caption_name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("fk_ID_admin")
+                        .HasColumnType("int");
+
+                    b.Property<int>("n_ofSeat")
+                        .HasMaxLength(50)
+                        .HasColumnType("int");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("FK_AdminID");
+
+                    b.HasIndex("FK_tripID");
+
+                    b.HasIndex("fk_ID_admin");
+
+                    b.ToTable("bus");
+                });
+
+            modelBuilder.Entity("BTRS.Models.Passenger", b =>
+                {
+                    b.Property<int>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ID"), 1L, 1);
+
+                    b.Property<string>("Gender")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("email")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("password")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("phone_n")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("username")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("ID");
+
+                    b.ToTable("passenger");
+                });
+
+            modelBuilder.Entity("BTRS.Models.Passenger_Trip", b =>
+                {
+                    b.Property<int>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ID"), 1L, 1);
+
+                    b.Property<int>("FK_PassengerID")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FK_TripID")
+                        .HasColumnType("int");
+
+                    b.Property<int>("passesngerID")
+                        .HasColumnType("int");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("FK_PassengerID");
+
+                    b.HasIndex("FK_TripID");
+
+                    b.ToTable("passenger_Trips");
+                });
+
+            modelBuilder.Entity("BTRS.Models.Trip", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+
+                    b.Property<int?>("AdminId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("E_date")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("S_date")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("trip_dist")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AdminId");
+
+                    b.ToTable("trip");
+                });
+
+            modelBuilder.Entity("BTRS.Models.Bus", b =>
+                {
+                    b.HasOne("BTRS.Models.Admin", "admin")
+                        .WithMany()
+                        .HasForeignKey("FK_AdminID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BTRS.Models.Trip", "trip")
+                        .WithMany()
+                        .HasForeignKey("FK_tripID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BTRS.Models.Trip", null)
+                        .WithMany("bus")
+                        .HasForeignKey("fk_ID_admin");
+
+                    b.Navigation("admin");
+
+                    b.Navigation("trip");
+                });
+
+            modelBuilder.Entity("BTRS.Models.Passenger_Trip", b =>
+                {
+                    b.HasOne("BTRS.Models.Passenger", "passenger")
+                        .WithMany("passenger_Trip")
+                        .HasForeignKey("FK_PassengerID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BTRS.Models.Trip", "trip")
+                        .WithMany("passenger_trip")
+                        .HasForeignKey("FK_TripID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("passenger");
+
+                    b.Navigation("trip");
+                });
+
+            modelBuilder.Entity("BTRS.Models.Trip", b =>
+                {
+                    b.HasOne("BTRS.Models.Admin", "Admin")
+                        .WithMany("trip")
+                        .HasForeignKey("AdminId");
+
+                    b.Navigation("Admin");
+                });
+
+            modelBuilder.Entity("BTRS.Models.Admin", b =>
+                {
+                    b.Navigation("trip");
+                });
+
+            modelBuilder.Entity("BTRS.Models.Passenger", b =>
+                {
+                    b.Navigation("passenger_Trip");
+                });
+
+            modelBuilder.Entity("BTRS.Models.Trip", b =>
+                {
+                    b.Navigation("bus");
+
+                    b.Navigation("passenger_trip");
+                });
+#pragma warning restore 612, 618
+        }
+    }
+}
+///////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////
+using System.ComponentModel.DataAnnotations;
+
+namespace BTRS.Models
+{
+    public class Admin
+    {
+        [Key]
+        public int Id { set; get; }
+        [Required(ErrorMessage = "Should Be insert")]
+        [StringLength(50)]
+        public string username { set; get; }
+        [Required(ErrorMessage = "Should Be insert")]
+        [StringLength(50)]
+        public string password { set; get; }
+        [Required(ErrorMessage = "Should Be insert")]
+        [StringLength(50)]
+        public string fname { set; get; }
+        public ICollection<Trip> trip { set; get; }
+
+
+    }
+}
+............................................................................
+.........................................................................
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace BTRS.Models
+{
+    public class Bus
+    {
+        [Key]
+        public int ID { set; get; }
+        public String caption_name { set; get; }
+        [Required(ErrorMessage = "Should Be insert")]
+        [StringLength(50)]
+        public string n_ofSeat { set; get; }
+        [ForeignKey("FK_tripID")]
+        public Trip trip { set; get; }
+      
+        [ForeignKey("FK_AdminID")]
+        public Admin admin { set; get; }
+     
+
+
+    }
+}
+...............................................................
+................................................................
+namespace BTRS.Models
+{
+    public class ErrorViewModel
+    {
+        public string? RequestId { get; set; }
+
+        public bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
+    }
+}
+.............................................................................
+....................................................................
+using System.ComponentModel.DataAnnotations;
+
+namespace BTRS.Models
+{
+    public class Login
+    {
+        [Required(ErrorMessage = "please enter the username")]
+        public string username { set; get; }
+        [Required(ErrorMessage = "please enter the password")]
+        public string password { set; get; }
+
+    }
+}
+......................................................................
+.....................................................................
+using System.ComponentModel.DataAnnotations;
+
+namespace BTRS.Models
+{
+    public class Passenger
+    {
+        [Key]
+        public int ID { set; get; }
+        [Required(ErrorMessage = "Should Be insert")]
+        [StringLength(50)]
+        public string name { set; get; }
+        [Required(ErrorMessage = "Should Be insert")]
+        [StringLength(50)]
+        public  string password { set; get; }
+        [Required(ErrorMessage = "Should Be insert")]
+        [StringLength(50)]
+        public string Gender { set; get; }
+        [Required(ErrorMessage = "Should Be insert")]
+        [StringLength(50)]
+        public string username { set; get; }
+        [Required(ErrorMessage = "Should Be insert")]
+        [StringLength(50)]
+        public string email { set; get; }
+        [Required(ErrorMessage = "Should Be insert")]
+        [StringLength(50)]
+        public string phone_n { set; get; }
+        public ICollection<Passenger_Trip> passenger_Trip { set; get; }
+
+
+    }
+}
+..............................................................
+..............................................................
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace BTRS.Models
+{
+    public class Passenger_Trip
+    {
+        [Key]
+        public int ID { set; get; }
+
+        [ForeignKey("FK_PassengerID")]
+        public Passenger passenger { set; get; }
+        public int passesngerID { set; get; }
+        [ForeignKey("FK_TripID")]
+        public Trip trip { set; get; }
+    
+
+    }
+}
+........................................................................................
+....................................................................................
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace BTRS.Models
+{
+    public class Trip
+    {
+        [Key]
+        public int Id { set; get; }
+        [Required(ErrorMessage = "Should Be insert")]
+        [StringLength(50)]
+        public string trip_dist { set; get; }
+        [Required(ErrorMessage = "Should Be insert")]
+        [StringLength(50)]
+        public string S_date { set; get; }
+        [Required(ErrorMessage = "Should Be insert")]
+        [StringLength(50)]
+        public string E_date { set; get; }
+        [ForeignKey("fk_ID_admin")]
+       
+        public ICollection<Bus>bus { set; get; }
+        public ICollection<Passenger_Trip> passenger_trip { set; get; }
+        public Admin?Admin { get; set; }
+    }
+}
+///////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////
+@model BTRS.Models.Bus
+
+@{
+    ViewData["Title"] = "Create";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h1>Create</h1>
+
+<h4>Bus</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Create">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="form-group">
+                <label asp-for="caption_name" class="control-label"></label>
+                <input asp-for="caption_name" class="form-control" />
+                <span asp-validation-for="caption_name" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="n_ofSeat" class="control-label"></label>
+                <input asp-for="n_ofSeat" class="form-control" />
+                <span asp-validation-for="n_ofSeat" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label class="control-label"> TripId</label>
+
+               
+
+            </div>
+
+            <div class="form-group">
+                <input type="submit" value="Create" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Back to List</a>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+.....................................................................................
+@model BTRS.Models.Bus
+
+@{
+    ViewData["Title"] = "Delete";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h1>Delete</h1>
+
+<h3>Are you sure you want to delete this?</h3>
+<div>
+    <h4>Bus</h4>
+    <hr />
+    <dl class="row">
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.caption_name)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.caption_name)
+        </dd>
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.n_ofSeat)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.n_ofSeat)
+        </dd>
+    </dl>
+    
+    <form asp-action="Delete">
+        <input type="hidden" asp-for="ID" />
+        <input type="submit" value="Delete" class="btn btn-danger" /> |
+        <a asp-action="Index">Back to List</a>
+    </form>
+</div>
+..........................................................................................
+@model BTRS.Models.Bus
+
+@{
+    ViewData["Title"] = "Details";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h1>Details</h1>
+
+<div>
+    <h4>Bus</h4>
+    <hr />
+    <dl class="row">
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.caption_name)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.caption_name)
+        </dd>
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.n_ofSeat)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.n_ofSeat)
+        </dd>
+    </dl>
+</div>
+<div>
+    <a asp-action="Edit" asp-route-id="@Model?.ID">Edit</a> |
+    <a asp-action="Index">Back to List</a>
+</div>
+.................................................................................................
+@model BTRS.Models.Bus
+
+@{
+    ViewData["Title"] = "Edit";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h1>Edit</h1>
+
+<h4>Bus</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Edit">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <input type="hidden" asp-for="ID" />
+            <div class="form-group">
+                <label asp-for="caption_name" class="control-label"></label>
+                <input asp-for="caption_name" class="form-control" />
+                <span asp-validation-for="caption_name" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="n_ofSeat" class="control-label"></label>
+                <input asp-for="n_ofSeat" class="form-control" />
+                <span asp-validation-for="n_ofSeat" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Save" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Back to List</a>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+.............................................................................................................
+@model IEnumerable<BTRS.Models.Bus>
+
+@{
+    ViewData["Title"] = "Index";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h1>Index</h1>
+
+<p>
+    <a asp-action="Create">Create New</a>
+</p>
+<table class="table">
+    <thead>
+        <tr>
+            <th>
+                @Html.DisplayNameFor(model => model.caption_name)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.n_ofSeat)
+            </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+@foreach (var item in Model) {
+        <tr>
+            <td>
+                @Html.DisplayFor(modelItem => item.caption_name)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.n_ofSeat)
+            </td>
+            <td>
+                <a asp-action="Edit" asp-route-id="@item.ID">Edit</a> |
+                <a asp-action="Details" asp-route-id="@item.ID">Details</a> |
+                <a asp-action="Delete" asp-route-id="@item.ID">Delete</a>
+            </td>
+        </tr>
+}
+    </tbody>
+</table>
+............................................................................................
+..............................................................................................
+@{
+    ViewData["Title"] = "Home Page";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Welcome</h1>
+    <p>Learn about <a href="https://docs.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+</div>
+..................................................................................................
+@{
+    ViewData["Title"] = "Privacy Policy";
+}
+<h1>@ViewData["Title"]</h1>
+
+<p>Use this page to detail your site's privacy policy.</p>
+............................................................................................
+.................................................................................................
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - BTRS</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/BTRS.styles.css" asp-append-version="true" />
+</head>
+<body>
+    <header>
+        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+            <div class="container-fluid">
+                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">BTRS</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
+                        aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                    <ul class="navbar-nav flex-grow-1">
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
+    <div class="container">
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="border-top footer text-muted">
+        <div class="container">
+            &copy; 2023 - BTRS - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+        </div>
+    </footer>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
+...................................................................................................................
+<script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+<script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+................................................................................................................
+@model ErrorViewModel
+@{
+    ViewData["Title"] = "Error";
+}
+
+<h1 class="text-danger">Error.</h1>
+<h2 class="text-danger">An error occurred while processing your request.</h2>
+
+@if (Model.ShowRequestId)
+{
+    <p>
+        <strong>Request ID:</strong> <code>@Model.RequestId</code>
+    </p>
+}
+
+<h3>Development Mode</h3>
+<p>
+    Swapping to <strong>Development</strong> environment will display more detailed information about the error that occurred.
+</p>
+<p>
+    <strong>The Development environment shouldn't be enabled for deployed applications.</strong>
+    It can result in displaying sensitive information from exceptions to end users.
+    For local debugging, enable the <strong>Development</strong> environment by setting the <strong>ASPNETCORE_ENVIRONMENT</strong> environment variable to <strong>Development</strong>
+    and restarting the app.
+</p>
+..................................................................................................................
+.................................................................................................................
+<h1>Create</h1>
+
+<h4>Trip</h4>
+<hr />
+
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Create">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="form-group">
+                <label asp-for="trip_dist" class="control-label"></label>
+                <input asp-for="trip_dist" class="form-control" />
+                <span asp-validation-for="trip_dist" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="S_date" class="control-label"></label>
+                <input asp-for="S_date" class="form-control" />
+                <span asp-validation-for="S_date" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="E_date" class="control-label"></label>
+                <input asp-for="E_date" class="form-control" />
+                <span asp-validation-for="E_date" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Create" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Back to Trips </a>
+
+    
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+......................................................................................................
+@model BTRS.Models.Trip
+
+@{
+    ViewData["Title"] = "Delete";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h1>Delete</h1>
+
+<h3>Are you sure you want to delete this?</h3>
+<div>
+    <h4>Trip</h4>
+    <hr />
+    <dl class="row">
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.trip_dist)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.trip_dist)
+        </dd>
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.S_date)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.S_date)
+        </dd>
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.E_date)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.E_date)
+        </dd>
+    </dl>
+    
+    <form asp-action="Delete">
+        <input type="hidden" asp-for="Id" />
+        <input type="submit" value="Delete" class="btn btn-danger" /> |
+        <a asp-action="Index">Back to List</a>
+    </form>
+</div>
+............................................................................................
+@model BTRS.Models.Trip
+
+@{
+    ViewData["Title"] = "Details";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h1>Details</h1>
+
+<div>
+    <h4>Trip</h4>
+    <hr />
+    <dl class="row">
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.trip_dist)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.trip_dist)
+        </dd>
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.S_date)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.S_date)
+        </dd>
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.E_date)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.E_date)
+        </dd>
+    </dl>
+</div>
+<div>
+    <a asp-action="Edit" asp-route-id="@Model?.Id">Edit</a> |
+    <a asp-action="Index">Back to List</a>
+</div>
+..............................................................................
+@model BTRS.Models.Trip
+
+@{
+    ViewData["Title"] = "Edit";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h1>Edit</h1>
+
+<h4>Trip</h4>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Edit">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <input type="hidden" asp-for="Id" />
+            <div class="form-group">
+                <label asp-for="trip_dist" class="control-label"></label>
+                <input asp-for="trip_dist" class="form-control" />
+                <span asp-validation-for="trip_dist" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="S_date" class="control-label"></label>
+                <input asp-for="S_date" class="form-control" />
+                <span asp-validation-for="S_date" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="E_date" class="control-label"></label>
+                <input asp-for="E_date" class="form-control" />
+                <span asp-validation-for="E_date" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Save" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Back to List</a>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+..................................................................................................
+@model IEnumerable<BTRS.Models.Trip>
+
+@{
+    ViewData["Title"] = "Index";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h1>Index</h1>
+
+<p>
+    <a asp-action="Create">Create New</a>
+</p>
+<table class="table">
+    <thead>
+        <tr>
+            <th>
+                @Html.DisplayNameFor(model => model.trip_dist)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.S_date)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.E_date)
+            </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+@foreach (var item in Model) {
+        <tr>
+            <td>
+                @Html.DisplayFor(modelItem => item.trip_dist)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.S_date)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.E_date)
+            </td>
+            <td>
+                <a asp-action="Edit" asp-route-id="@item.Id">Edit</a> |
+                <a asp-action="Details" asp-route-id="@item.Id">Details</a> |
+                <a asp-action="Delete" asp-route-id="@item.Id">Delete</a>
+            </td>
+        </tr>
+}
+    </tbody>
+</table>
+..............................................................................................
+................................................................................................
+                    @Html.DisplayFor(modelItem => item.trip_dist)
+                </td>
+                <td>
+                    @Html.DisplayFor(modelItem => item.S_date)
+                </td>
+                <td>
+                    @Html.DisplayFor(modelItem => item.E_date)
+                </td>
+               <td>
+                    <a asp-action="DeleteBook" asp-route-tripid="@item.Id">Delete reservation</a>
+               </td>
+
+            </tr>
+        }
+    </tbody>
+</table>
+<h4>Happy trip</h4>
+
+<a style="animation-direction" asp-action="Bus_Trip" asp-controller="User" class="btn btn-link"> Back to trips</a>
+...........................................................................................................................
+@model IEnumerable<BTRS.Models.Trip>
+
+@{
+    ViewData["Title"] = "Bus_Trip";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+<h1>Welcome to our website  </h1>
+<h3>Book your travel</h3>
+
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>
+                @Html.DisplayNameFor(model => model.trip_dist)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.S_date)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.E_date)
+            </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+@foreach (var item in Model) {
+        <tr>
+            <td>
+                @Html.DisplayFor(modelItem => item.trip_dist)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.S_date)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.E_date)
+            </td>
+            <td>
+                <a asp-action="Book" asp-route-id="@item.Id">Book</a> 
+                
+            </td>
+        </tr>
+}
+    </tbody>
+</table>
+......................................................................................................................
+@model BTRS.Models.Login
+
+<form method="post">
+    <table>
+        <tr>
+            <td>
+                username
+            </td>
+            <td>
+                <input asp-for="username" type="text" class="form-control" />
+
+            </td>
+            <td>
+                <span asp-validation-for="username"> </span>
+            </td>
+        </tr>
+
+        <tr>
+            <td>
+                password
+            </td>
+            <td>
+                <input asp-for="password" type="password" class="form-control" />
+            </td>
+            <td>
+                <span style="color:red" asp-validation-for="password"> </span>
+            </td>
+        </tr>
+
+    </table>
+    <br />
+
+    <input type="submit" value="Login" class="btn btn-outline-primary" />
+    <a asp-action="SignUp" asp-controller="User" class="btn btn-primary"> SignUp</a>
+
+
+</form>
+
+@TempData["Msg"]
+
+..................................................................................................
+@model Passenger
+
+<h1> Passenger SingUp</h1>
+@using (Html.BeginForm("SignUp", "User", FormMethod.Post))
+{
+    @Html.AntiForgeryToken()
+
+    <div class="form-group">
+        @Html.LabelFor(model => model.name)
+        @Html.TextBoxFor(model => model.name, new { @class = "form-control" })
+        @Html.ValidationMessageFor(model => model.name)
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(model => model.username)
+        @Html.TextBoxFor(model => model.username, new { @class = "form-control" })
+        @Html.ValidationMessageFor(model => model.username)
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(model => model.password)
+        @Html.TextBoxFor(model => model.password, new {type="password", @class = "form-control" })
+        @Html.ValidationMessageFor(model => model.password)
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(model => model.Gender)
+        @Html.TextBoxFor(model => model.Gender, new { @class = "form-control" })
+        @Html.ValidationMessageFor(model => model.Gender)
+    </div>
+
+    <div class="form-group">
+        @Html.LabelFor(model => model.email)
+        @Html.TextBoxFor(model => model.email, new { @class = "form-control" })
+        @Html.ValidationMessageFor(model => model.email)
+    </div>
+
+    <div class="form-group">
+        @Html.LabelFor(model => model.phone_n)
+        @Html.TextBoxFor(model => model.phone_n, new { @class = "form-control" })
+        @Html.ValidationMessageFor(model => model.phone_n)
+
+    </div>
+
+    <button type="submit" class="btn btn-primary">Register</button>
+    <a asp-action="Login"asp-controller="User" class="btn btn-primary">Login</a>
+}
+@TempData["msg"]
+......................................................................................................
+@using BTRS
+@using BTRS.Models
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+.................................................................................................................
+@{
+    Layout = "_Layout";
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "ConnectionStrings": {
+    "conn": "Data Source=DESKTOP-SPRNFV6\\SQLEXPRESS;Integrated Security=True"
+  }
+}
+ /////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////
+using BTRS.Data;
+using Microsoft.EntityFrameworkCore;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+builder.Services.AddControllersWithViews();
+builder.Services.AddSession(option =>
+{
+    option.IdleTimeout = TimeSpan.FromMinutes(30);
+});
+builder.Services.AddDbContext<SystemDbContext>(item => item.UseSqlServer(builder.Configuration.GetConnectionString("conn")));
+var app = builder.Build();
+app.UseSession();
+// Configure the HTTP request pipeline.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Home/Error");
+    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+
+app.UseRouting();
+
+app.UseAuthorization();
+
+app.MapControllerRoute(
+    name: "default",
+    pattern: "{controller=User}/{action=Login}/{id?}");
+
+app.Run();
+..............................................................................................................
+
